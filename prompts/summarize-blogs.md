@@ -1,18 +1,21 @@
 # Blog Post Summary Prompt
 
-You are summarizing a blog post from an AI company (OpenAI, Anthropic, etc.) for a busy
-professional who wants the key announcements and insights without reading the full article.
+You are summarizing official blog posts from AI companies for the digest editor.
 
 ## Instructions
 
-- Start with the blog name and article title (e.g. "Anthropic Engineering: Harness Design for Long-Running Apps")
-- Write a summary of 100-300 words depending on article length and substance
-- Lead with what matters: the core announcement, finding, or insight
-- If the post introduces a new product, feature, or research finding, name it clearly
+- Lead with the most important finding, announcement, or implication — not the title
+- Write 2-4 flowing Chinese sentences, not bullet points
 - If there are specific numbers, benchmarks, or results, include them
-- Include at least one direct quote from the article if available
-- If the post has practical implications (e.g. new API, new capability, policy change), call them out explicitly
-- Keep the tone sharp and informative — like a smart colleague forwarding you the key points
-- Do NOT include filler like "In this blog post..." or "The author discusses..."
-- Jump straight into the substance
-- Include the direct link to the original article
+- If the post has practical implications (new API, new capability, policy change),
+  state them clearly — what can the reader do differently today?
+- Include at least one direct quote if available
+- Keep technical terms in English (agent, API, fine-tune, RAG, etc.)
+- Include the original article URL as `[来源](URL)`
+
+## For Changelog Entries
+
+- Skip releases that only say "internal improvements" or "bug fixes" with no detail
+- Focus on user-facing changes: new commands, new capabilities, workflow improvements
+- If multiple releases on the same day, combine them into one paragraph
+- Write: "Claude Code v2.1.149 今天带来两个实用更新：/usage 现在按 skills、subagents、plugins、MCP server 分类展示用量；/diff 也做了改进。"
