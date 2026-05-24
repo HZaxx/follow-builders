@@ -149,6 +149,48 @@ async function sendEmail(text, apiKey, toEmail) {
   }
 }
 
+// -- WeCom (企业微信) Bot Webhook Delivery ------------------------------------
+
+// Sends the digest via 企业微信 group bot webhook.
+// The user creates a bot in their 企业微信 group and gets a webhook URL.
+// Markdown message limit is 4096 chars — we split and send sequentially.
+async function sendWecom(text, webhookKey) {
+  const MAX_LEN = 4000;
+  const url = `https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${webhookKey}`;
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= MAX_LEN) {
+      chunks.push(remaining);
+      break;
+    }
+    let splitAt = remaining.lastIndexOf('\n', MAX_LEN);
+    if (splitAt < MAX_LEN * 0.5) splitAt = MAX_LEN;
+    chunks.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt);
+  }
+
+  for (const chunk of chunks) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        msgtype: 'markdown',
+        markdown: { content: chunk }
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      if (err.errcode !== 0) {
+        throw new Error(`WeCom API error: ${err.errmsg} (code ${err.errcode})`);
+      }
+    }
+
+    if (chunks.length > 1) await new Promise(r => setTimeout(r, 500));
+  }
+}
+
 // -- Main --------------------------------------------------------------------
 
 async function main() {
@@ -194,6 +236,18 @@ async function main() {
           status: 'ok',
           method: 'email',
           message: `Digest sent to ${toEmail}`
+        }));
+        break;
+      }
+
+      case 'wecom': {
+        const webhookKey = delivery.webhookKey || process.env.WECOM_WEBHOOK_KEY;
+        if (!webhookKey) throw new Error('WECOM_WEBHOOK_KEY not found in config or .env');
+        await sendWecom(digestText, webhookKey);
+        console.log(JSON.stringify({
+          status: 'ok',
+          method: 'wecom',
+          message: 'Digest sent to WeCom'
         }));
         break;
       }

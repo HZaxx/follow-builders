@@ -42,9 +42,9 @@
       "properties": {
         "method": {
           "type": "string",
-          "enum": ["stdout", "telegram", "email"],
+          "enum": ["stdout", "telegram", "email", "wecom"],
           "default": "stdout",
-          "description": "Delivery method: stdout (terminal/agent), telegram (bot message), email (via Resend)"
+          "description": "Delivery method: stdout (terminal/agent), telegram (bot message), email (via Resend), wecom (企业微信 bot webhook)"
         },
         "chatId": {
           "type": "string",
@@ -53,6 +53,10 @@
         "email": {
           "type": "string",
           "description": "Email address to send digest to (only for email method)"
+        },
+        "webhookKey": {
+          "type": "string",
+          "description": "WeCom bot webhook key (only for wecom method)"
         }
       }
     },
