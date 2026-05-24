@@ -1016,7 +1016,7 @@ async function fetchBlogContent(blogs, state, errors) {
     try {
       // Step 1: Discover articles from the blog index page
       const indexRes = await fetch(blog.indexUrl, {
-        headers: { "User-Agent": "FollowBuilders/1.0 (feed aggregator)" },
+        headers: { "User-Agent": RSS_USER_AGENT },
       });
       if (!indexRes.ok) {
         errors.push(
@@ -1066,7 +1066,7 @@ async function fetchBlogContent(blogs, state, errors) {
         try {
           // Fetch the full article page
           const articleRes = await fetch(article.url, {
-            headers: { "User-Agent": "FollowBuilders/1.0 (feed aggregator)" },
+            headers: { "User-Agent": RSS_USER_AGENT },
           });
           if (!articleRes.ok) {
             errors.push(
