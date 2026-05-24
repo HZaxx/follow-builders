@@ -1,11 +1,8 @@
 {
-  "generatedAt": "2026-05-24T15:49:11.558Z",
+  "generatedAt": "2026-05-24T15:50:29.479Z",
   "lookbackHours": 72,
   "blogs": [],
   "stats": {
     "blogPosts": 0
-  },
-  "errors": [
-    "Blog: Failed to fetch index for OpenAI Blog: HTTP 403"
-  ]
+  }
 }
