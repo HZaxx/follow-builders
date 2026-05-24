@@ -48,9 +48,8 @@
     },
     {
       "name": "OpenAI Blog",
-      "type": "scrape",
-      "indexUrl": "https://openai.com/blog",
-      "articleBaseUrl": "https://openai.com/blog/",
+      "type": "rss",
+      "rssUrl": "https://openai.com/blog/rss.xml",
       "fetchMethod": "http"
     }
   ],

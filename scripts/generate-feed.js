@@ -856,149 +856,107 @@ function extractClaudeBlogArticleContent(html) {
   return { title, author, publishedAt, content };
 }
 
-// Scrapes the OpenAI Blog index page (openai.com/blog).
-// OpenAI's site is a Next.js app. We try __NEXT_DATA__ first for structured
-// article metadata, then fall back to regex-based link extraction.
-function parseOpenAIBlogIndex(html) {
-  const articles = [];
-  const seenSlugs = new Set();
+// Fetches blog content from an RSS feed (used for blogs behind Cloudflare
+// that can't be scraped directly, e.g. OpenAI Blog at openai.com/blog/rss.xml).
+// Returns article-like objects with title, url, publishedAt, description content.
+async function fetchBlogContentFromRss(blog, cutoff, state, errors) {
+  const results = [];
 
-  // Strategy 1: Look for article data in Next.js __NEXT_DATA__ script tag
-  const nextDataMatch = html.match(
-    /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i,
-  );
-  if (nextDataMatch) {
-    try {
-      const data = JSON.parse(nextDataMatch[1]);
-      // Walk the Next.js page props tree to find posts
-      const pageProps = data?.props?.pageProps;
-      const posts =
-        pageProps?.posts || pageProps?.articles || pageProps?.entries || pageProps?.data || [];
-      if (Array.isArray(posts)) {
-        for (const post of posts) {
-          const slug = post.slug?.current || post.slug || "";
-          if (!slug || seenSlugs.has(slug)) continue;
-          seenSlugs.add(slug);
-          articles.push({
-            title: post.title || post.headline || "Untitled",
-            url: `https://openai.com/blog/${slug}`,
-            publishedAt:
-              post.publishedOn || post.publishedAt || post.date || post.publishDate || null,
-            description: post.summary || post.description || post.excerpt || "",
-          });
-        }
-      }
-      if (articles.length > 0) return articles;
-    } catch {
-      // JSON parsing failed, fall through to regex approach
-    }
-  }
-
-  // Strategy 2: Regex-based extraction from rendered HTML.
-  // OpenAI blog links follow the pattern /blog/<slug>
-  const linkRegex = /href="\/blog\/([a-z0-9-]+)"/gi;
-  let linkMatch;
-  while ((linkMatch = linkRegex.exec(html)) !== null) {
-    const slug = linkMatch[1];
-    if (seenSlugs.has(slug)) continue;
-    seenSlugs.add(slug);
-    articles.push({
-      title: "",
-      url: `https://openai.com/blog/${slug}`,
-      publishedAt: null,
-      description: "",
+  try {
+    const res = await fetch(blog.rssUrl, {
+      headers: { "User-Agent": RSS_USER_AGENT },
+      signal: AbortSignal.timeout(15000),
     });
-  }
-  return articles;
-}
-
-// Extracts the main text content from an OpenAI Blog article page.
-// Tries JSON-LD first (metadata), then __NEXT_DATA__ (structured body),
-// then falls back to stripping HTML from the article container.
-function extractOpenAIBlogArticleContent(html) {
-  let title = "";
-  let author = "";
-  let publishedAt = null;
-  let content = "";
-
-  // Try JSON-LD structured data first (most reliable for metadata)
-  const jsonLdRegex =
-    /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi;
-  let jsonLdMatch;
-  while ((jsonLdMatch = jsonLdRegex.exec(html)) !== null) {
-    try {
-      const ld = JSON.parse(jsonLdMatch[1]);
-      if (ld["@type"] === "BlogPosting" || ld["@type"] === "Article") {
-        title = ld.headline || ld.name || "";
-        author = ld.author?.name || "";
-        publishedAt = ld.datePublished || null;
-        break;
-      }
-    } catch {
-      // Not valid JSON-LD, skip
+    if (!res.ok) {
+      errors.push(`Blog: Failed to fetch RSS for ${blog.name}: HTTP ${res.status}`);
+      return results;
     }
-  }
 
-  // Try __NEXT_DATA__ for structured article content
-  const nextDataMatch = html.match(
-    /<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i,
-  );
-  if (nextDataMatch) {
-    try {
-      const data = JSON.parse(nextDataMatch[1]);
-      const pageProps = data?.props?.pageProps;
-      const post =
-        pageProps?.post || pageProps?.article || pageProps?.entry || pageProps;
-      if (!title) title = post?.title || post?.headline || "";
-      if (!author) author = post?.author?.name || post?.authors?.[0]?.name || "";
-      if (!publishedAt)
-        publishedAt =
-          post?.publishedOn || post?.publishedAt || post?.date || post?.publishDate || null;
+    const xml = await res.text();
+    const articles = [];
 
-      // Extract text from body blocks (common portable text / rich text format)
-      const body = post?.body || post?.content || [];
-      if (Array.isArray(body)) {
-        const textParts = [];
-        for (const block of body) {
-          if (block._type === "block" && block.children) {
-            const text = block.children.map((c) => c.text || "").join("");
-            if (text.trim()) textParts.push(text.trim());
-          }
-          if (typeof block === "string") textParts.push(block);
-        }
-        content = textParts.join("\n\n");
+    // Parse RSS <item> entries — reuse the same regex approach as parseRssFeed
+    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+    let itemMatch;
+    while ((itemMatch = itemRegex.exec(xml)) !== null) {
+      const block = itemMatch[1];
+
+      const titleMatch =
+        block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) ||
+        block.match(/<title>([\s\S]*?)<\/title>/);
+      const title = titleMatch ? titleMatch[1].trim() : "Untitled";
+
+      const linkMatch = block.match(/<link>([\s\S]*?)<\/link>/);
+      const url = linkMatch ? linkMatch[1].trim() : null;
+
+      const guidMatch = block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/);
+      const guid = guidMatch ? guidMatch[1].trim() : url;
+
+      const pubDateMatch = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+      const publishedAt = pubDateMatch
+        ? new Date(pubDateMatch[1].trim()).toISOString()
+        : null;
+
+      const descMatch =
+        block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ||
+        block.match(/<description>([\s\S]*?)<\/description>/);
+
+      // Strip HTML tags from description to get plain text content
+      let content = "";
+      if (descMatch) {
+        content = descMatch[1]
+          .replace(/<[^>]+>/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&nbsp;/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
       }
-      if (content) return { title, author, publishedAt, content };
-    } catch {
-      // Fall through to HTML stripping
+
+      if (url && guid) {
+        articles.push({
+          title,
+          url,
+          publishedAt,
+          description: content,
+          content,
+        });
+      }
     }
+
+    // Filter to unseen, within lookback, cap at MAX_ARTICLES_PER_BLOG
+    let count = 0;
+    for (const article of articles) {
+      if (state.seenArticles[article.url]) continue;
+      if (article.publishedAt && new Date(article.publishedAt) < cutoff) continue;
+      if (count >= MAX_ARTICLES_PER_BLOG) break;
+
+      results.push({
+        source: "blog",
+        name: blog.name,
+        title: article.title,
+        url: article.url,
+        publishedAt: article.publishedAt,
+        author: "",
+        description: article.description,
+        content: article.content,
+      });
+
+      state.seenArticles[article.url] = Date.now();
+      count++;
+    }
+
+    console.error(
+      `  ${blog.name}: RSS found ${articles.length} item(s), ${count} new`,
+    );
+  } catch (err) {
+    errors.push(`Blog: Error processing RSS for ${blog.name}: ${err.message}`);
   }
 
-  // Fallback: extract title from <h1> and body from <article> or main
-  const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  if (!title && h1Match) title = h1Match[1].replace(/<[^>]+>/g, "").trim();
-
-  // Try to find the article body
-  const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
-  const bodyHtml = articleMatch ? articleMatch[1] : html;
-
-  content = bodyHtml
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
-    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
-    .replace(/<header[\s\S]*?<\/header>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return { title, author, publishedAt, content };
+  return results;
 }
 
 // Main blog fetching orchestrator.
@@ -1010,6 +968,14 @@ async function fetchBlogContent(blogs, state, errors) {
   const cutoff = new Date(Date.now() - BLOG_LOOKBACK_HOURS * 60 * 60 * 1000);
 
   for (const blog of blogs) {
+    // RSS-type blogs: fetch from RSS feed (no HTML scraping needed)
+    if (blog.type === "rss") {
+      console.error(`  Processing RSS blog: ${blog.name}...`);
+      const rssResults = await fetchBlogContentFromRss(blog, cutoff, state, errors);
+      results.push(...rssResults);
+      continue;
+    }
+
     console.error(`  Processing blog: ${blog.name}...`);
     let candidates = [];
 
@@ -1031,8 +997,6 @@ async function fetchBlogContent(blogs, state, errors) {
         candidates = parseAnthropicEngineeringIndex(indexHtml);
       } else if (blog.indexUrl.includes("claude.com")) {
         candidates = parseClaudeBlogIndex(indexHtml);
-      } else if (blog.indexUrl.includes("openai.com")) {
-        candidates = parseOpenAIBlogIndex(indexHtml);
       }
 
       // Step 2: Filter to unseen articles, cap at MAX_ARTICLES_PER_BLOG.
@@ -1082,8 +1046,6 @@ async function fetchBlogContent(blogs, state, errors) {
             extracted = extractAnthropicArticleContent(articleHtml);
           } else if (article.url.includes("claude.com/blog")) {
             extracted = extractClaudeBlogArticleContent(articleHtml);
-          } else if (article.url.includes("openai.com/blog")) {
-            extracted = extractOpenAIBlogArticleContent(articleHtml);
           }
 
           if (!extracted || !extracted.content) {
