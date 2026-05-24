@@ -211,6 +211,12 @@
     "https://www.anthropic.com/engineering/claude-code-auto-mode": 1779435203786,
     "https://claude.com/blog/new-in-claude-managed-agents": 1779520425204,
     "https://openai.com/index/gartner-2026-agentic-coding-leader": 1779638679421,
-    "https://openai.com/index/virgin-atlantic": 1779638679421
+    "https://openai.com/index/virgin-atlantic": 1779638679421,
+    "https://github.com/anthropics/claude-code/releases/tag/v2.1.150": 1779644447742,
+    "https://github.com/anthropics/claude-code/releases/tag/v2.1.149": 1779644447742,
+    "https://github.com/anthropics/claude-code/releases/tag/v2.1.148": 1779644447742,
+    "https://github.com/openai/codex/releases/tag/rust-v0.134.0-alpha.3": 1779644448542,
+    "https://github.com/openai/codex/releases/tag/rust-v0.134.0-alpha.2": 1779644448542,
+    "https://github.com/openai/codex/releases/tag/rust-v0.134.0-alpha.1": 1779644448542
   }
 }
