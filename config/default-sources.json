@@ -51,6 +51,18 @@
       "type": "rss",
       "rssUrl": "https://openai.com/blog/rss.xml",
       "fetchMethod": "http"
+    },
+    {
+      "name": "Claude Code Changelog",
+      "type": "rss",
+      "rssUrl": "https://github.com/anthropics/claude-code/releases.atom",
+      "fetchMethod": "http"
+    },
+    {
+      "name": "Codex Changelog",
+      "type": "rss",
+      "rssUrl": "https://github.com/openai/codex/releases.atom",
+      "fetchMethod": "http"
     }
   ],
   "x_accounts": [
@@ -75,6 +87,8 @@
     { "name": "Ashok Elluswamy", "handle": "aelluswamy" },
     { "name": "Swaraj", "handle": "smalireddy" },
     { "name": "Ben Hylak", "handle": "benhylak" },
-    { "name": "Riley Brown", "handle": "rileybrown_ai" }
+    { "name": "Riley Brown", "handle": "rileybrown_ai" },
+    { "name": "Claude", "handle": "claudeai" },
+    { "name": "OpenAI", "handle": "OpenAI" }
   ]
 }

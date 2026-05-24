@@ -875,55 +875,87 @@ async function fetchBlogContentFromRss(blog, cutoff, state, errors) {
     const xml = await res.text();
     const articles = [];
 
-    // Parse RSS <item> entries — reuse the same regex approach as parseRssFeed
-    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
-    let itemMatch;
-    while ((itemMatch = itemRegex.exec(xml)) !== null) {
-      const block = itemMatch[1];
+    // Detect feed format: try RSS <item> first, then Atom <entry>
+    const isAtom = /<entry>[\s\S]*?<\/entry>/i.test(xml) && !/<item>/i.test(xml);
+    const entryRegex = isAtom
+      ? /<entry>([\s\S]*?)<\/entry>/gi
+      : /<item>([\s\S]*?)<\/item>/gi;
 
-      const titleMatch =
-        block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) ||
-        block.match(/<title>([\s\S]*?)<\/title>/);
-      const title = titleMatch ? titleMatch[1].trim() : "Untitled";
+    let entryMatch;
+    while ((entryMatch = entryRegex.exec(xml)) !== null) {
+      const block = entryMatch[1];
+      let title, url, guid, publishedAt, content;
 
-      const linkMatch = block.match(/<link>([\s\S]*?)<\/link>/);
-      const url = linkMatch ? linkMatch[1].trim() : null;
+      if (isAtom) {
+        // Atom feed (GitHub Releases)
+        const titleMatch = block.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        title = titleMatch ? titleMatch[1].trim() : "Untitled";
 
-      const guidMatch = block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/);
-      const guid = guidMatch ? guidMatch[1].trim() : url;
+        const linkMatch = block.match(/<link[^>]*href="([^"]*)"[^>]*\/>/i) ||
+                          block.match(/<link[^>]*href="([^"]*)"[^>]*>/i);
+        url = linkMatch ? linkMatch[1].trim() : null;
 
-      const pubDateMatch = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-      const publishedAt = pubDateMatch
-        ? new Date(pubDateMatch[1].trim()).toISOString()
-        : null;
+        const idMatch = block.match(/<id>([\s\S]*?)<\/id>/i);
+        guid = idMatch ? idMatch[1].trim() : url;
 
-      const descMatch =
-        block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ||
-        block.match(/<description>([\s\S]*?)<\/description>/);
+        const pubMatch =
+          block.match(/<published>([\s\S]*?)<\/published>/i) ||
+          block.match(/<updated>([\s\S]*?)<\/updated>/i);
+        publishedAt = pubMatch ? new Date(pubMatch[1].trim()).toISOString() : null;
 
-      // Strip HTML tags from description to get plain text content
-      let content = "";
-      if (descMatch) {
-        content = descMatch[1]
-          .replace(/<[^>]+>/g, " ")
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/&nbsp;/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
+        // Atom <content type="html"> or <summary>
+        const contentMatch =
+          block.match(/<content[^>]*>([\s\S]*?)<\/content>/i) ||
+          block.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i);
+        if (contentMatch) {
+          content = contentMatch[1]
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+      } else {
+        // RSS feed
+        const titleMatch =
+          block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) ||
+          block.match(/<title>([\s\S]*?)<\/title>/);
+        title = titleMatch ? titleMatch[1].trim() : "Untitled";
+
+        const linkMatch = block.match(/<link>([\s\S]*?)<\/link>/);
+        url = linkMatch ? linkMatch[1].trim() : null;
+
+        const guidMatch = block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/);
+        guid = guidMatch ? guidMatch[1].trim() : url;
+
+        const pubDateMatch = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+        publishedAt = pubDateMatch
+          ? new Date(pubDateMatch[1].trim()).toISOString()
+          : null;
+
+        const descMatch =
+          block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/) ||
+          block.match(/<description>([\s\S]*?)<\/description>/);
+        if (descMatch) {
+          content = descMatch[1]
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
       }
 
       if (url && guid) {
-        articles.push({
-          title,
-          url,
-          publishedAt,
-          description: content,
-          content,
-        });
+        articles.push({ title, url, publishedAt, description: content, content });
       }
     }
 
